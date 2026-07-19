@@ -1,0 +1,16 @@
+spring:
+  application:
+    name: lumen-api
+
+server:
+  # Render injects PORT; default to 8080 for local runs.
+  port: ${PORT:8080}
+  # Honor X-Forwarded-Proto/Host from a tunnel (cloudflared/ngrok) so absolute
+  # links and the OpenAPI servers entry use the public https URL, not localhost.
+  forward-headers-strategy: framework
+
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger-ui.html

@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Lumen Coffee Roasters — Brand</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>
+    :root {
+      --amber: #D97706;
+      --charcoal: #1C1917;
+      --cream: #FEF3C7;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: 'Helvetica Neue', Arial, sans-serif;
+      background: var(--cream);
+      color: var(--charcoal);
+      line-height: 1.6;
+    }
+    header {
+      background: var(--charcoal);
+      color: var(--cream);
+      padding: 3rem 1.5rem;
+      text-align: center;
+    }
+    header svg { width: 72px; height: 72px; }
+    h1 {
+      font-family: Georgia, 'Times New Roman', serif;
+      color: var(--amber);
+      margin: 1rem 0 .25rem;
+      font-size: 2.25rem;
+    }
+    .tagline { font-size: 1.1rem; opacity: .9; }
+    main { max-width: 680px; margin: 0 auto; padding: 2.5rem 1.5rem; }
+    h2 {
+      font-family: Georgia, 'Times New Roman', serif;
+      color: var(--charcoal);
+      border-bottom: 2px solid var(--amber);
+      padding-bottom: .4rem;
+    }
+    .swatches { display: flex; gap: 1rem; margin: 1.5rem 0; flex-wrap: wrap; }
+    .swatch {
+      flex: 1 1 140px;
+      border-radius: 10px;
+      padding: 1.25rem 1rem;
+      color: var(--cream);
+      font-family: monospace;
+      font-size: .9rem;
+    }
+    .swatch.amber { background: var(--amber); }
+    .swatch.charcoal { background: var(--charcoal); }
+    .swatch.cream { background: var(--cream); color: var(--charcoal); border: 1px solid var(--amber); }
+    blockquote {
+      font-family: Georgia, serif;
+      font-style: italic;
+      border-left: 3px solid var(--amber);
+      margin: 1.5rem 0;
+      padding-left: 1rem;
+      color: #44403c;
+    }
+    footer { text-align: center; padding: 2rem; font-size: .85rem; color: #78716c; }
+    a { color: var(--amber); }
+  </style>
+</head>
+<body>
+  <header>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Lumen Coffee Roasters logo">
+      <circle cx="32" cy="32" r="30" fill="#FEF3C7"/>
+      <circle cx="32" cy="32" r="30" fill="none" stroke="#D97706" stroke-width="3"/>
+      <text x="32" y="43" font-family="Georgia, serif" font-size="30" text-anchor="middle" fill="#1C1917">L</text>
+    </svg>
+    <h1>Lumen Coffee Roasters</h1>
+    <div class="tagline">Small-batch coffee, roasted with intent.</div>
+  </header>
+  <main>
+    <h2>Our story</h2>
+    <p>
+      Lumen started as one roaster, one drum, and a stubborn belief that coffee tastes better
+      when you can trace it to a single farm. We still roast in small batches, still cup every
+      lot before it ships, and still write the tasting notes ourselves — no committee, no
+      focus group. Six origins, rotated as harvests allow, roasted to let each one taste like
+      where it came from.
+    </p>
+
+    <h2>Voice</h2>
+    <blockquote>
+      Warm, craft-obsessed, no fluff. Short sentences. Talk like the person who roasted the
+      beans, not a marketing department. Never oversell.
+    </blockquote>
+
+    <h2>Palette</h2>
+    <div class="swatches">
+      <div class="swatch amber">Amber<br>#D97706</div>
+      <div class="swatch charcoal">Charcoal<br>#1C1917</div>
+      <div class="swatch cream">Cream<br>#FEF3C7</div>
+    </div>
+
+    <h2>Typography</h2>
+    <p>
+      Headings: <strong>Georgia, 'Times New Roman', serif</strong><br>
+      Body: <strong>'Helvetica Neue', Arial, sans-serif</strong>
+    </p>
+
+    <h2>Machine-readable version</h2>
+    <p>
+      Structured brand tokens (palette, typography, voice, logo) are available at this same URL
+      with <code>Accept: application/json</code>, and embedded directly in the OpenAPI document
+      as <code>x-branding</code> at <a href="/v3/api-docs">/v3/api-docs</a>.
+    </p>
+  </main>
+  <footer>Lumen Coffee Roasters is a fictional brand created for this demo.</footer>
+</body>
+</html>
