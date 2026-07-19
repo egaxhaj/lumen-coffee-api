@@ -61,7 +61,7 @@ public class OrderController {
         this.brandPreferenceResolver = brandPreferenceResolver;
     }
 
-    @GetMapping(produces = { MediaTypes.HAL_JSON_VALUE, MediaTypes.HAL_FORMS_JSON_VALUE })
+    @GetMapping(produces = { MediaType.APPLICATION_JSON_VALUE, MediaTypes.HAL_JSON_VALUE, MediaTypes.HAL_FORMS_JSON_VALUE })
     @Operation(
             summary = "List orders and discover how to place one",
             description = "Returns all orders placed so far. The self link carries a HAL-FORMS "
@@ -94,7 +94,7 @@ public class OrderController {
         return collection;
     }
 
-    @PostMapping(produces = { MediaTypes.HAL_JSON_VALUE, MediaTypes.HAL_FORMS_JSON_VALUE })
+    @PostMapping(produces = { MediaType.APPLICATION_JSON_VALUE, MediaTypes.HAL_JSON_VALUE, MediaTypes.HAL_FORMS_JSON_VALUE })
     @Operation(
             summary = "Place an order for a product",
             description = "Creates a new order for a given productId and quantity. This is the same "
@@ -153,7 +153,7 @@ public class OrderController {
         return builder.body(model);
     }
 
-    @GetMapping(value = "/{id}", produces = { MediaTypes.HAL_JSON_VALUE, MediaTypes.HAL_FORMS_JSON_VALUE })
+    @GetMapping(value = "/{id}", produces = { MediaType.APPLICATION_JSON_VALUE, MediaTypes.HAL_JSON_VALUE, MediaTypes.HAL_FORMS_JSON_VALUE })
     @Operation(
             summary = "Get order status",
             description = "Returns the current status of an order. While the order can still be "
@@ -190,7 +190,7 @@ public class OrderController {
         return builder.body(model);
     }
 
-    @DeleteMapping(value = "/{id}", produces = { MediaTypes.HAL_JSON_VALUE, MediaTypes.HAL_FORMS_JSON_VALUE })
+    @DeleteMapping(value = "/{id}", produces = { MediaType.APPLICATION_JSON_VALUE, MediaTypes.HAL_JSON_VALUE, MediaTypes.HAL_FORMS_JSON_VALUE })
     @Operation(
             summary = "Cancel an order",
             description = "Cancels a placed order. Only available while the order's status is PLACED — "

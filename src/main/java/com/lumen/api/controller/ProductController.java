@@ -14,6 +14,7 @@ import io.swagger.v3.oas.annotations.extensions.ExtensionProperty;
 import org.springframework.hateoas.CollectionModel;
 import org.springframework.hateoas.Link;
 import org.springframework.hateoas.MediaTypes;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -46,7 +47,7 @@ public class ProductController {
         this.brandPreferenceResolver = brandPreferenceResolver;
     }
 
-    @GetMapping(produces = { MediaTypes.HAL_JSON_VALUE, MediaTypes.HAL_FORMS_JSON_VALUE })
+    @GetMapping(produces = { MediaType.APPLICATION_JSON_VALUE, MediaTypes.HAL_JSON_VALUE, MediaTypes.HAL_FORMS_JSON_VALUE })
     @Operation(
             summary = "List the coffee catalog",
             description = "Returns every product Lumen Coffee Roasters sells, each with a self link "
@@ -67,7 +68,7 @@ public class ProductController {
         return collection;
     }
 
-    @GetMapping(value = "/{id}", produces = { MediaTypes.HAL_JSON_VALUE, MediaTypes.HAL_FORMS_JSON_VALUE })
+    @GetMapping(value = "/{id}", produces = { MediaType.APPLICATION_JSON_VALUE, MediaTypes.HAL_JSON_VALUE, MediaTypes.HAL_FORMS_JSON_VALUE })
     @Operation(
             summary = "Get a single coffee product",
             description = "Returns full details for one product. Its self link carries a HAL-FORMS "
