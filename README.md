@@ -120,15 +120,43 @@ Swagger UI (for a human reviewing the demo) is at `http://localhost:8080/swagger
 
 ### Testing with an agent
 
-- **Claude Code (local)**: just point it at `http://localhost:8080/api` — it can reach
-  localhost directly. See `PROMPTS.md` for ready-made prompts.
-- **Claude Desktop**: its web fetch runs through Anthropic's servers, which can't reach
-  your localhost. Tunnel first:
-  ```bash
-  cloudflared tunnel --url http://localhost:8080
-  ```
-  then give Claude Desktop the public URL it prints, `<tunnel>/api`, instead of
-  `localhost:8080/api`. (Or deploy the jar somewhere public.)
+- **Claude Code (local)**: just point it at `http://localhost:8080/api` — it has a real
+  HTTP client (curl), so pure OpenAPI + HATEOAS is sufficient. See `PROMPTS.md`.
+- **Claude Desktop**: two gaps to bridge, discovered the hard way:
+  1. *Reachability*: Desktop's built-in fetch runs through Anthropic's servers (no
+     localhost) and is GET-only with no custom headers — it can read the API but can
+     never POST an order. Its code-execution sandbox blocks arbitrary egress entirely.
+  2. *Capability*: the fix is the generic MCP server in `mcp/http_mcp_server.py` — a
+     single API-agnostic `http_request` tool (~80 lines, stdlib only, retries on 503).
+     It grants Desktop a real HTTP client; the API remains the only source of truth
+     about what to call. Add to `claude_desktop_config.json` and restart Desktop:
+     ```json
+     {
+       "mcpServers": {
+         "http": {
+           "command": "python3",
+           "args": ["/absolute/path/to/mcp/http_mcp_server.py"]
+         }
+       }
+     }
+     ```
+
+### Deploying (Render)
+
+The repo carries a `render.yaml` blueprint (free plan, Docker runtime, health check on
+`/api`) and a multi-stage `Dockerfile`. Connect the repo as a Blueprint in the Render
+dashboard; pushes to `main` auto-deploy. Two behaviors worth knowing:
+
+- The app honors Render's `PORT` env var and `X-Forwarded-*` headers
+  (`server.forward-headers-strategy: framework`), so all HAL links and the OpenAPI
+  `servers` entry come out as the public https URL automatically.
+- Free instances sleep after 15 idle minutes and take ~30–60s to wake (first request
+  gets a 503 with `Retry-After`). Pre-warm before demos, or point a free uptime pinger
+  at `/api`. The MCP server's 503 retry absorbs this automatically.
+- HAL resources are served as plain `application/json` by default (same body): some
+  agent fetch pipelines classify the nonstandard `application/hal+json` media type as
+  binary. Clients that explicitly ask for `application/hal+json` or
+  `application/prs.hal-forms+json` still get those.
 
 ## Notable deviations from the original design note
 

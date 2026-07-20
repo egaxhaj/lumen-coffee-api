@@ -45,12 +45,30 @@ This isn't a prompt for the agent — it's how to verify springdoc's dynamic-doc
 yourself: add a `@GetMapping`, restart, `curl localhost:8080/v3/api-docs | jq '.paths'`
 and see the new path appear with zero manual spec edits.
 
-## 5. Claude Desktop (remote)
+## 5. Claude Desktop (full flow, via the generic MCP server)
 
-Same as prompt 1, but give Claude Desktop the tunneled public URL's `/api` path instead
-of localhost, and additionally ask:
+Requires the `http_request` MCP server from `mcp/http_mcp_server.py` in
+`claude_desktop_config.json` (see README) — Desktop's built-in fetch is GET-only and
+cannot place the order. With the deployed URL:
 
-> Render the order confirmation as a styled artifact using their branding.
+> Using only your http_request tool, start from
+> https://lumen-coffee-api.onrender.com/api and nothing else. Find out what this
+> business is, how to order a coffee, and place an order for one. Then render the
+> order confirmation as a styled HTML artifact that faithfully uses the company's
+> branding — get their brand colors, voice, and logo from what the API provides.
+> If a request returns 503, retry it.
 
-This exercises the harder path: Claude Desktop's fetch tool runs through Anthropic's
-servers, so it can only reach a publicly reachable URL, not `localhost`.
+Verified working: the agent discovers everything from the root URL, orders via the
+HAL-FORMS affordance, and renders a brand-faithful artifact (amber/charcoal/cream,
+Georgia headings, roaster's voice) — a business with no website getting visual brand
+presence inside an agent conversation, from data the API published about itself.
+
+## 6. Claude Desktop without MCP (read-only)
+
+Desktop's built-in fetch can read the API but not write to it. Discovery, branding,
+and capability search still demo well:
+
+> Starting only from https://lumen-coffee-api.onrender.com/api, find out what this
+> business is and sells, show me its branding as a styled artifact, and explain
+> exactly how an agent would place and cancel an order using only what the API told
+> you. If a request fails with a 503, wait and retry — the server may be waking up.
