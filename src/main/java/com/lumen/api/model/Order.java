@@ -17,6 +17,9 @@ public class Order {
     private final BigDecimal totalPrice;
     private final Instant createdAt;
     private OrderStatus status;
+    private String paymentReference;
+    private String receiptNumber;
+    private Instant paidAt;
 
     public Order(Long id, Long productId, String productName, int quantity,
                  BigDecimal unitPrice, BigDecimal totalPrice, Instant createdAt, OrderStatus status) {
@@ -64,5 +67,24 @@ public class Order {
 
     public void setStatus(OrderStatus status) {
         this.status = status;
+    }
+
+    public String getPaymentReference() {
+        return paymentReference;
+    }
+
+    public String getReceiptNumber() {
+        return receiptNumber;
+    }
+
+    public Instant getPaidAt() {
+        return paidAt;
+    }
+
+    public void markPaid(String paymentReference, String receiptNumber, Instant paidAt) {
+        this.status = OrderStatus.PAID;
+        this.paymentReference = paymentReference;
+        this.receiptNumber = receiptNumber;
+        this.paidAt = paidAt;
     }
 }

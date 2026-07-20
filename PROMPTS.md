@@ -53,10 +53,16 @@ cannot place the order. With the deployed URL:
 
 > Using only your http_request tool, start from
 > https://lumen-coffee-api.onrender.com/api and nothing else. Find out what this
-> business is, how to order a coffee, and place an order for one. Then render the
-> order confirmation as a styled HTML artifact that faithfully uses the company's
-> branding — get their brand colors, voice, and logo from what the API provides.
-> If a request returns 503, retry it.
+> business is, buy a coffee from them — place the order AND complete the payment —
+> and then render the receipt as a styled HTML artifact that faithfully uses the
+> company's branding. Get their brand colors, voice, and logo from what the API
+> provides. If a request returns 503, retry it.
+
+The transaction is two steps, both discovered from the API itself: POST /api/orders
+creates the order AWAITING_PAYMENT with a pay affordance (`_templates.default` /
+`x:payment` link); POSTing `{"method":"DEMO_CARD","cardToken":"tok_demo"}` there
+completes the purchase and returns the PAID order with a receipt number and a
+brand-styled receipt card in `_embedded.presentation`. No real money moves.
 
 Verified working: the agent discovers everything from the root URL, orders via the
 HAL-FORMS affordance, and renders a brand-faithful artifact (amber/charcoal/cream,

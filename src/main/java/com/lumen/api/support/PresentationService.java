@@ -86,6 +86,42 @@ public class PresentationService {
         return new Presentation(html, markdown);
     }
 
+    public Presentation forReceipt(Order order) {
+        String html = """
+                <div style="font-family:%s;background:%s;border:2px solid %s;border-radius:12px;padding:20px;max-width:420px;">
+                  <div style="font-family:%s;color:%s;font-size:12px;letter-spacing:.08em;text-transform:uppercase;">Lumen Coffee Roasters &mdash; Receipt</div>
+                  <h2 style="font-family:%s;color:%s;margin:6px 0 4px;">Paid. Beans incoming.</h2>
+                  <p style="color:%s;font-size:14px;line-height:1.5;margin:0 0 8px;">
+                    Order #%d &mdash; %d &times; %s
+                  </p>
+                  <div style="font-family:%s;color:%s;font-size:20px;font-weight:bold;">$%s</div>
+                  <div style="color:%s;font-size:12px;margin-top:8px;">Receipt %s &middot; paid %s</div>
+                  <div style="display:inline-block;margin-top:10px;padding:3px 10px;border:1px solid %s;border-radius:999px;color:%s;font-size:11px;text-transform:uppercase;letter-spacing:.08em;">PAID</div>
+                </div>
+                """.formatted(
+                FONT_BODY, COLOR_CREAM, COLOR_AMBER,
+                FONT_BODY, COLOR_AMBER,
+                FONT_HEADING, COLOR_CHARCOAL,
+                COLOR_CHARCOAL, order.getId(), order.getQuantity(), escape(order.getProductName()),
+                FONT_HEADING, COLOR_AMBER, order.getTotalPrice(),
+                COLOR_CHARCOAL, escape(order.getReceiptNumber()), order.getPaidAt(),
+                COLOR_AMBER, COLOR_AMBER
+        );
+
+        String markdown = """
+                **Lumen Coffee Roasters — Receipt**
+
+                ## Paid. Beans incoming.
+                Order #%d — %d &times; %s
+
+                **$%s**
+                Receipt **%s** · paid %s · status **PAID**
+                """.formatted(order.getId(), order.getQuantity(), order.getProductName(),
+                order.getTotalPrice(), order.getReceiptNumber(), order.getPaidAt());
+
+        return new Presentation(html, markdown);
+    }
+
     private String escape(String s) {
         return s == null ? "" : s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;");
     }

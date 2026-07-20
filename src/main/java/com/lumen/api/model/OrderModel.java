@@ -25,12 +25,19 @@ public class OrderModel extends RepresentationModel<OrderModel> {
     private final Instant createdAt;
     private final OrderStatus status;
 
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    private final String receiptNumber;
+
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    private final Instant paidAt;
+
     @JsonProperty("_embedded")
     @JsonInclude(JsonInclude.Include.NON_NULL)
     private Map<String, Object> embedded;
 
     public OrderModel(Long id, Long productId, String productName, int quantity, BigDecimal unitPrice,
-                       BigDecimal totalPrice, Instant createdAt, OrderStatus status) {
+                       BigDecimal totalPrice, Instant createdAt, OrderStatus status,
+                       String receiptNumber, Instant paidAt) {
         this.id = id;
         this.productId = productId;
         this.productName = productName;
@@ -39,6 +46,8 @@ public class OrderModel extends RepresentationModel<OrderModel> {
         this.totalPrice = totalPrice;
         this.createdAt = createdAt;
         this.status = status;
+        this.receiptNumber = receiptNumber;
+        this.paidAt = paidAt;
     }
 
     public Long getId() {
@@ -71,6 +80,14 @@ public class OrderModel extends RepresentationModel<OrderModel> {
 
     public OrderStatus getStatus() {
         return status;
+    }
+
+    public String getReceiptNumber() {
+        return receiptNumber;
+    }
+
+    public Instant getPaidAt() {
+        return paidAt;
     }
 
     public void setEmbedded(Map<String, Object> embedded) {

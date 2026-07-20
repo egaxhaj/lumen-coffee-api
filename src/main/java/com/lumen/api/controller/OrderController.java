@@ -6,6 +6,7 @@ import com.lumen.api.model.OrderModel;
 import com.lumen.api.model.OrderRepository;
 import com.lumen.api.model.OrderRequest;
 import com.lumen.api.model.OrderStatus;
+import com.lumen.api.model.PaymentRequest;
 import com.lumen.api.model.Product;
 import com.lumen.api.model.ProductRepository;
 import com.lumen.api.support.ApiLinks;
@@ -97,19 +98,20 @@ public class OrderController {
     @PostMapping(produces = { MediaType.APPLICATION_JSON_VALUE, MediaTypes.HAL_JSON_VALUE, MediaTypes.HAL_FORMS_JSON_VALUE })
     @Operation(
             summary = "Place an order for a product",
-            description = "Creates a new order for a given productId and quantity. This is the same "
-                    + "operation exposed as the HAL-FORMS affordance on a product's self link and on the "
-                    + "orders collection's self link (both surface it as the single entry under "
-                    + "_templates, keyed 'default') — prefer following those affordances over "
-                    + "constructing this request from documentation alone.",
+            description = "Creates a new order for a given productId and quantity. The order is created "
+                    + "AWAITING_PAYMENT — it is not a completed purchase until paid via the pay "
+                    + "affordance it returns (_templates.default, POST to its x:payment link). This "
+                    + "create operation is the same one exposed as the HAL-FORMS affordance on a "
+                    + "product's self link — prefer following affordances over constructing requests "
+                    + "from documentation alone.",
             extensions = @Extension(name = "x-llm", properties = {
                     @ExtensionProperty(name = "whenToUse", value = "Call once you have a productId (from "
-                            + "GET /api/products) and know the desired quantity. This is the actual "
-                            + "'ordering a coffee' action."),
+                            + "GET /api/products) and know the desired quantity. This starts the "
+                            + "transaction; complete it by following the returned pay affordance."),
                     @ExtensionProperty(name = "preconditions", value = "productId must reference an "
                             + "in-stock product; quantity must be a positive integer."),
-                    @ExtensionProperty(name = "followUpRels", value = "[\"self\",\"x:status\",\"_templates.default\"]", parseValue = true),
-                    @ExtensionProperty(name = "examplePrompt", value = "Order two bags of the Yirgacheffe Sunrise."),
+                    @ExtensionProperty(name = "followUpRels", value = "[\"x:payment\",\"_templates.default\",\"_templates.cancel\",\"self\",\"x:status\"]", parseValue = true),
+                    @ExtensionProperty(name = "examplePrompt", value = "Order two bags of the Yirgacheffe Sunrise and pay for them."),
                     @ExtensionProperty(name = "brandingNote", value = "If you have already retrieved branding "
                             + "(via x-branding or GET /brand), send 'Prefer: brand=none' and style the "
                             + "confirmation yourself; otherwise the response's _embedded.presentation "
@@ -134,7 +136,7 @@ public class OrderController {
 
         BigDecimal total = product.getPrice().multiply(BigDecimal.valueOf(request.getQuantity()));
         Order order = orderRepository.save(new Order(null, product.getId(), product.getName(), request.getQuantity(),
-                product.getPrice(), total, Instant.now(), OrderStatus.PLACED));
+                product.getPrice(), total, Instant.now(), OrderStatus.AWAITING_PAYMENT));
 
         OrderModel model = assembler.toModel(order);
         var decision = brandPreferenceResolver.resolve(prefer, brandVersion);
@@ -153,19 +155,82 @@ public class OrderController {
         return builder.body(model);
     }
 
+    @PostMapping(value = "/{id}/payment", produces = { MediaType.APPLICATION_JSON_VALUE, MediaTypes.HAL_JSON_VALUE, MediaTypes.HAL_FORMS_JSON_VALUE })
+    @Operation(
+            summary = "Pay for an order (completes the transaction)",
+            description = "Takes payment for an AWAITING_PAYMENT order and returns it as PAID with a "
+                    + "receipt number. Demo payment: method must be 'DEMO_CARD' and any non-blank "
+                    + "cardToken (e.g. 'tok_demo') is accepted — no real money moves. Surfaced on "
+                    + "unpaid order resources as the HAL-FORMS pay affordance (_templates.default) "
+                    + "and the x:payment link; prefer following those.",
+            extensions = @Extension(name = "x-llm", properties = {
+                    @ExtensionProperty(name = "whenToUse", value = "Call after POST /api/orders to "
+                            + "complete the purchase. Follow the x:payment link (or _templates.default) "
+                            + "on the unpaid order. Body: {\"method\":\"DEMO_CARD\",\"cardToken\":\"tok_demo\"}."),
+                    @ExtensionProperty(name = "preconditions", value = "Order status must be "
+                            + "AWAITING_PAYMENT. Paying an already-PAID order returns 409; so does a "
+                            + "CANCELLED one."),
+                    @ExtensionProperty(name = "followUpRels", value = "[\"self\",\"x:status\"]", parseValue = true),
+                    @ExtensionProperty(name = "examplePrompt", value = "Pay for order 1 with the demo card."),
+                    @ExtensionProperty(name = "brandingNote", value = "The PAID response embeds a "
+                            + "brand-styled receipt in _embedded.presentation (unless you send "
+                            + "'Prefer: brand=none'). Rendering that receipt is the natural end of the "
+                            + "transaction for the user.")
+            })
+    )
+    public ResponseEntity<OrderModel> payOrder(@PathVariable Long id,
+                                                @RequestBody PaymentRequest payment,
+                                                @RequestHeader(value = "Prefer", required = false) String prefer,
+                                                @RequestHeader(value = "X-Brand-Version", required = false) String brandVersion) {
+        Order order = orderRepository.findById(id)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "No order with id " + id));
+        if (order.getStatus() == OrderStatus.PAID) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "Order " + id + " is already paid (receipt " + order.getReceiptNumber() + ")");
+        }
+        if (order.getStatus() == OrderStatus.CANCELLED) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Order " + id + " was cancelled and cannot be paid");
+        }
+        if (payment == null || !"DEMO_CARD".equalsIgnoreCase(payment.getMethod())) {
+            throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY,
+                    "method must be 'DEMO_CARD' (this demo accepts no other payment methods)");
+        }
+        if (payment.getCardToken() == null || payment.getCardToken().isBlank()) {
+            throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY,
+                    "cardToken is required (any non-blank token, e.g. 'tok_demo')");
+        }
+
+        order.markPaid("pay_" + Long.toHexString(System.nanoTime()),
+                String.format("LMN-%06d", order.getId()), Instant.now());
+
+        OrderModel model = assembler.toModel(order);
+        var decision = brandPreferenceResolver.resolve(prefer, brandVersion);
+
+        ResponseEntity.BodyBuilder builder = ResponseEntity.ok();
+        if (decision.includePresentation()) {
+            model.setEmbedded(Map.of("presentation", presentationService.forReceipt(order)));
+            builder.header("Brand-Version", com.lumen.api.support.BrandTokens.VERSION);
+        }
+        if (decision.preferenceApplied() != null) {
+            builder.header("Preference-Applied", decision.preferenceApplied());
+        }
+        return builder.body(model);
+    }
+
     @GetMapping(value = "/{id}", produces = { MediaType.APPLICATION_JSON_VALUE, MediaTypes.HAL_JSON_VALUE, MediaTypes.HAL_FORMS_JSON_VALUE })
     @Operation(
             summary = "Get order status",
-            description = "Returns the current status of an order. While the order can still be "
-                    + "cancelled, the response carries a HAL-FORMS cancel affordance — the entry under "
-                    + "_templates keyed 'default', with method DELETE (visible with Accept: "
-                    + "application/prs.hal-forms+json).",
+            description = "Returns the current status of an order. While AWAITING_PAYMENT it carries "
+                    + "two HAL-FORMS affordances (visible with Accept: application/prs.hal-forms+json): "
+                    + "pay (_templates.default, POST) and cancel (_templates.cancel, DELETE), plus an "
+                    + "x:payment link. Once PAID it carries the receipt fields and no further actions.",
             extensions = @Extension(name = "x-llm", properties = {
                     @ExtensionProperty(name = "whenToUse", value = "Call after placing an order (follow "
-                            + "the 'self' or 'x:status' link on the order response) to check its status."),
+                            + "the 'self' or 'x:status' link on the order response) to check its status "
+                            + "or re-read its pay/cancel affordances."),
                     @ExtensionProperty(name = "preconditions", value = "A valid order id, obtained from "
                             + "POST /api/orders or GET /api/orders."),
-                    @ExtensionProperty(name = "followUpRels", value = "[\"_templates.default\"]", parseValue = true),
+                    @ExtensionProperty(name = "followUpRels", value = "[\"x:payment\",\"_templates.default\",\"_templates.cancel\"]", parseValue = true),
                     @ExtensionProperty(name = "examplePrompt", value = "What's the status of order 3?")
             })
     )
@@ -180,8 +245,13 @@ public class OrderController {
 
         ResponseEntity.BodyBuilder builder = ResponseEntity.ok();
         if (decision.includePresentation()) {
-            String headline = order.getStatus() == OrderStatus.CANCELLED ? "Order cancelled" : "Order status";
-            model.setEmbedded(Map.of("presentation", presentationService.forOrder(order, headline)));
+            if (order.getStatus() == OrderStatus.PAID) {
+                model.setEmbedded(Map.of("presentation", presentationService.forReceipt(order)));
+            } else {
+                String headline = order.getStatus() == OrderStatus.CANCELLED ? "Order cancelled"
+                        : "Order status — awaiting payment";
+                model.setEmbedded(Map.of("presentation", presentationService.forOrder(order, headline)));
+            }
             builder.header("Brand-Version", com.lumen.api.support.BrandTokens.VERSION);
         }
         if (decision.preferenceApplied() != null) {
@@ -193,17 +263,17 @@ public class OrderController {
     @DeleteMapping(value = "/{id}", produces = { MediaType.APPLICATION_JSON_VALUE, MediaTypes.HAL_JSON_VALUE, MediaTypes.HAL_FORMS_JSON_VALUE })
     @Operation(
             summary = "Cancel an order",
-            description = "Cancels a placed order. Only available while the order's status is PLACED — "
-                    + "surfaced on the order resource as the HAL-FORMS affordance keyed "
-                    + "'_templates.default' with method DELETE, which disappears once the order is "
-                    + "already cancelled.",
+            description = "Cancels an unpaid order. Only available while the order's status is "
+                    + "AWAITING_PAYMENT — surfaced on the order resource as the HAL-FORMS affordance "
+                    + "keyed '_templates.cancel' with method DELETE, which disappears once the order "
+                    + "is paid or cancelled. Paid orders cannot be cancelled in this demo (no refunds).",
             extensions = @Extension(name = "x-llm", properties = {
-                    @ExtensionProperty(name = "whenToUse", value = "Call to cancel an order the agent (or "
-                            + "user) no longer wants. Prefer following the order resource's own DELETE "
-                            + "affordance (_templates.default) rather than calling this directly from "
-                            + "documentation."),
+                    @ExtensionProperty(name = "whenToUse", value = "Call to abandon an unpaid order the "
+                            + "agent (or user) no longer wants. Prefer following the order resource's "
+                            + "own DELETE affordance (_templates.cancel) rather than calling this "
+                            + "directly from documentation."),
                     @ExtensionProperty(name = "preconditions", value = "A valid order id whose status is "
-                            + "still PLACED."),
+                            + "still AWAITING_PAYMENT. PAID and CANCELLED orders return 409."),
                     @ExtensionProperty(name = "followUpRels", value = "[\"self\",\"x:status\"]", parseValue = true),
                     @ExtensionProperty(name = "examplePrompt", value = "Cancel order 3.")
             })
@@ -213,6 +283,10 @@ public class OrderController {
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "No order with id " + id));
         if (order.getStatus() == OrderStatus.CANCELLED) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Order " + id + " is already cancelled");
+        }
+        if (order.getStatus() == OrderStatus.PAID) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "Order " + id + " is already paid — refunds aren't supported in this demo");
         }
         order.setStatus(OrderStatus.CANCELLED);
 

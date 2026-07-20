@@ -27,9 +27,12 @@ Purely fictional brand, built for this demo.
    OpenAPI document (palette, typography, voice, logo, all inline — zero extra fetches),
    and as a standalone `GET /brand` resource, content-negotiated into `text/html`
    (a full styled page), `text/markdown`, or `application/json` (structured tokens).
-4. **Act** — `GET /api/products/{id}` returns a HAL-FORMS affordance (`_templates`) that
-   describes exactly how to place an order; the agent POSTs to `/api/orders` using only
-   what that affordance told it, no documentation reading required.
+4. **Transact** — `GET /api/products/{id}` returns a HAL-FORMS affordance (`_templates`)
+   that describes exactly how to place an order; the agent POSTs to `/api/orders` using
+   only what that affordance told it. The order comes back `AWAITING_PAYMENT` with a pay
+   affordance and `x:payment` link; paying (mock `DEMO_CARD` — no real money) completes
+   the transaction and returns a `PAID` order with a receipt number and a brand-styled
+   receipt card. Cancel is only offered — and only works — while unpaid.
 
 ## Architecture
 
@@ -71,8 +74,11 @@ GET /api
        └─ self   → GET /api/products/{id}          (carries _embedded.presentation
                                                        + a HAL-FORMS affordance)
             └─ _templates.default → POST /api/orders  {productId, quantity}
-                 └─ self / x:status → GET /api/orders/{id}
-                      └─ _templates.default → DELETE /api/orders/{id}   (cancel, while PLACED)
+                 │                                  → 201 AWAITING_PAYMENT
+                 ├─ x:payment / _templates.default → POST /api/orders/{id}/payment
+                 │      {method: DEMO_CARD, cardToken}  → 200 PAID + receipt
+                 │                                        (_embedded.presentation = branded receipt)
+                 └─ _templates.cancel → DELETE /api/orders/{id}   (only while AWAITING_PAYMENT)
 ```
 
 ### Notable implementation details
