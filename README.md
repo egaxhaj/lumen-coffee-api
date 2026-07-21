@@ -11,7 +11,10 @@ read documentation written specifically for it, retrieve the brand two different
 and complete a real task (ordering coffee) purely by following hypermedia links — no
 out-of-band knowledge, no scraping, no separate docs site.
 
-Purely fictional brand, built for this demo.
+Purely fictional brand, built for this demo. The thesis held — both Claude Code and
+Claude Desktop completed the full discover → buy → pay → branded-receipt flow from
+nothing but the root URL. What it took, and what that implies about OpenAPI, HATEOAS,
+and MCP's actual role, is written up in [FINDINGS.md](FINDINGS.md).
 
 ## The four things an agent can do here
 
@@ -43,26 +46,30 @@ src/main/java/com/lumen/api/
     OpenApiConfig.java             # agent-facing info.description + x-branding customizer
     CorsConfig.java                # fully open CORS (demo, no auth)
   model/
-    Product.java, Order.java, OrderStatus.java     # domain
+    Product.java, Order.java, OrderStatus.java     # domain (AWAITING_PAYMENT → PAID | CANCELLED)
     ProductRepository.java, OrderRepository.java   # in-memory stores, no DB
     ProductModel.java, OrderModel.java, RootModel.java, SearchHit.java  # HAL view models
-    OrderRequest.java              # POST /api/orders body (plain bean — see note below)
+    OrderRequest.java, PaymentRequest.java  # POST bodies (plain beans — see note below)
   controller/
     RootController.java            # GET /api (HAL entry point) + GET / (human page)
     ProductController.java         # GET /api/products, GET /api/products/{id}
-    OrderController.java           # GET/POST /api/orders, GET/DELETE /api/orders/{id}
-    BrandController.java           # GET /brand, content-negotiated
+    OrderController.java           # GET/POST /api/orders, GET/DELETE /api/orders/{id},
+                                   #   POST /api/orders/{id}/payment (completes the transaction)
+    BrandController.java           # GET /brand, content-negotiated, ETag/304
     SearchController.java          # GET /api/search?q=
   assembler/
     ProductAssembler.java          # links + placeOrder HAL-FORMS affordance
-    OrderAssembler.java            # links + cancel HAL-FORMS affordance
+    OrderAssembler.java            # links + status-dependent pay/cancel affordances
   support/
     BrandTokens.java                # single source of truth for brand tokens
-    Presentation.java, PresentationService.java  # branded HTML/markdown fragments
+    Presentation.java, PresentationService.java  # branded HTML/markdown fragments + receipt card
     BrandPreferenceResolver.java   # Prefer: brand=inline|none negotiation
+    ApiLinks.java                  # absolute links honoring X-Forwarded-* headers
 src/main/resources/
   application.yml
   brand/brand.html, brand/brand.md # the two static brand representations
+mcp/
+  http_mcp_server.py               # generic MCP server for Claude Desktop (see below)
 PROMPTS.md                         # demo scripts for Claude Code / Claude Desktop
 ```
 
@@ -118,7 +125,9 @@ curl -s http://localhost:8080/v3/api-docs | jq '."x-branding", .paths["/api/prod
 curl -s http://localhost:8080/api/products | jq
 curl -s -H 'Accept: application/prs.hal-forms+json' http://localhost:8080/api/products/1 | jq
 curl -s -X POST http://localhost:8080/api/orders -H 'Content-Type: application/json' \
-     -d '{"productId": 1, "quantity": 2}' | jq
+     -d '{"productId": 1, "quantity": 2}' | jq          # → AWAITING_PAYMENT + x:payment link
+curl -s -X POST http://localhost:8080/api/orders/1/payment -H 'Content-Type: application/json' \
+     -d '{"method": "DEMO_CARD", "cardToken": "tok_demo"}' | jq   # → PAID + branded receipt
 curl -s -H 'Accept: text/html' http://localhost:8080/brand
 ```
 
@@ -128,24 +137,56 @@ Swagger UI (for a human reviewing the demo) is at `http://localhost:8080/swagger
 
 - **Claude Code (local)**: just point it at `http://localhost:8080/api` — it has a real
   HTTP client (curl), so pure OpenAPI + HATEOAS is sufficient. See `PROMPTS.md`.
-- **Claude Desktop**: two gaps to bridge, discovered the hard way:
-  1. *Reachability*: Desktop's built-in fetch runs through Anthropic's servers (no
-     localhost) and is GET-only with no custom headers — it can read the API but can
-     never POST an order. Its code-execution sandbox blocks arbitrary egress entirely.
-  2. *Capability*: the fix is the generic MCP server in `mcp/http_mcp_server.py` — a
-     single API-agnostic `http_request` tool (~80 lines, stdlib only, retries on 503).
-     It grants Desktop a real HTTP client; the API remains the only source of truth
-     about what to call. Add to `claude_desktop_config.json` and restart Desktop:
-     ```json
-     {
-       "mcpServers": {
-         "http": {
-           "command": "python3",
-           "args": ["/absolute/path/to/mcp/http_mcp_server.py"]
-         }
-       }
-     }
-     ```
+- **Claude Desktop**: needs the MCP server below. Its built-in fetch is GET-only with
+  no custom headers (it can read the API but never POST an order), and its
+  code-execution sandbox blocks arbitrary network egress entirely.
+
+## The MCP server (`mcp/http_mcp_server.py`)
+
+Claude Desktop's failure mode was **capability, not knowledge**: after reading the
+OpenAPI doc it knew exactly how to place an order — and had no tool that could send a
+POST. The fix is a deliberately minimal MCP server exposing one generic tool:
+
+```
+http_request(method, url, headers?, body?)  →  status + headers + raw body
+```
+
+Design constraints, all load-bearing for the thesis:
+
+- **API-agnostic.** Nothing in the file mentions Lumen, coffee, or any endpoint. The
+  tool description tells the model to use "APIs' own discovery mechanisms" — so the
+  OpenAPI doc and HATEOAS links remain the *only* source of truth. This is the
+  capability pattern (an HTTP client bolted onto the agent), not the wrapper pattern
+  (one MCP tool per endpoint, which would re-describe the API and defeat the demo).
+- **Zero dependencies.** Python stdlib only; MCP over stdio is just newline-delimited
+  JSON-RPC 2.0, and the whole protocol here is three methods (`initialize`,
+  `tools/list`, `tools/call`) in ~80 lines. Runs anywhere `python3` exists.
+- **503-aware.** Retries once after `Retry-After` (+30s), which absorbs Render
+  free-tier cold starts without the agent having to care.
+- **Verbatim responses.** Status line, interesting headers (`Content-Type`,
+  `Location`, `Brand-Version`, `Preference-Applied`, `ETag`), and the raw body go
+  straight back to the model — no summarization layer to garble hrefs.
+
+Register it in `claude_desktop_config.json` (Settings → Developer → Edit Config),
+then fully restart Desktop:
+
+```json
+{
+  "mcpServers": {
+    "http": {
+      "command": "python3",
+      "args": ["/absolute/path/to/mcp/http_mcp_server.py"]
+    }
+  }
+}
+```
+
+Desktop spawns the file as a local subprocess and speaks JSON-RPC to it over
+stdin/stdout; the first `http_request` call triggers a consent prompt. With it in
+place, Claude Desktop completes the entire flow — discovery → order → payment →
+brand-styled receipt artifact — from nothing but the root URL (PROMPTS.md §5,
+verified). See `FINDINGS.md` for why this division of labor (API describes, MCP
+transports) is the interesting result.
 
 ### Deploying (Render)
 
